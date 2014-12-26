@@ -6,6 +6,7 @@ package Getopt::Long::Subcommand;
 use 5.010001;
 use strict;
 use warnings;
+use Log::Any '$log';
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -16,25 +17,32 @@ our @EXPORT = qw(
 sub _gl_getoptions {
     require Getopt::Long;
 
-    my ($which, $ospecs0, $res) = @_;
+    my ($which, $ospec0, $res) = @_;
+    $log->tracef('Performing Getopt::Long::GetOptions (%s)', $which);
 
-    my $ospecs;
+    my $ospec;
     if ($which eq 'strip') {
-        $ospecs = { map {$_=>sub{}} keys %$ospecs0 };
+        $ospec = { map {$_=>sub{}} keys %$ospec0 };
     } else {
-        $ospecs = { map {
+        $ospec = { map {
             my $k = $_;
             $k => (
-                ref($ospecs0->{$k}) eq 'CODE' ? sub {
+                ref($ospec0->{$k}) eq 'CODE' ? sub {
                     my ($cb, $val) = @_;
-                    $ospecs0->{$k}->($cb, $val, $res);
-                } : $ospecs0->{$k}
-            )} keys %$ospecs0 };
+                    $ospec0->{$k}->($cb, $val, $res);
+                } : $ospec0->{$k}
+            )} keys %$ospec0 };
     }
 
-    my $old_conf = Getopt::Long::Configure('no_ignore_case', 'bundling');
+    my $old_conf = Getopt::Long::Configure(
+        'no_ignore_case', 'bundling',
+        'pass_through',
+    );
     local $SIG{__WARN__} = sub{} if $which eq 'strip';
-    my $gl_res = Getopt::Long::GetOptions(%$ospecs);
+    $log->tracef('@ARGV before Getopt::Long::GetOptions: %s', \@ARGV);
+    $log->tracef('spec for Getopt::Long::GetOptions: %s', $ospec);
+    my $gl_res = Getopt::Long::GetOptions(%$ospec);
+    $log->tracef('@ARGV after  Getopt::Long::GetOptions: %s', \@ARGV);
     Getopt::Long::Configure($old_conf);
     $gl_res;
 }
@@ -44,49 +52,82 @@ sub _strip_opts_from_argv {
 }
 
 sub _GetOptions {
-    my ($args) = @_;
+    my ($cmdspec, $main_cmdspec, $level, $path, @ospecs) = @_;
 
-    my $has_opts = $args->{options} && keys(%{$args->{options}});
-    my $has_subcommands = $args->{subcommands} && keys(%{$args->{subcommands}});
-
+    $main_cmdspec //= $cmdspec;
+    $level //= 0;
+    $path //= '';
     my $res = {success=>undef};
+    my $gl_res;
 
-    my ($sc_name, $sc_spec);
+    my $has_opts = $cmdspec->{options} && keys(%{$cmdspec->{options}});
+    push @ospecs, $cmdspec->{options} if !@ospecs && $has_opts;
+
+    my $has_subcommands = $cmdspec->{subcommands} &&
+        keys(%{$cmdspec->{subcommands}});
+
+    # parse/strip all known options first, to get subcommand name from first
+    # element of @ARGV
+    my ($sc_name, $sc_spec, $sc_has_opts, $sc_has_subcommands);
     if ($has_subcommands) {
         local @ARGV = @ARGV;
-        _strip_opts_from_argv() if $has_opts;
-        @ARGV or do { warn "Missing subcommand\n"; return $res };
+        my %ospec;
+        for my $os (@ospecs) {
+            $ospec{$_} = $os->{$_} for keys %$os;
+        }
+        _strip_opts_from_argv(\%ospec) if @ospecs;
+        shift @ARGV for 1..$level; # discard parent command names
+        @ARGV or do {
+            warn "Missing subcommand".($path ? " for $path":"")."\n";
+            return $res;
+        };
         $sc_name = shift @ARGV;
-        $sc_spec = $args->{subcommands}{$sc_name} or do {
-            warn "Unknown subcommand '$sc_name'\n"; return $res };
+        $sc_spec = $cmdspec->{subcommands}{$sc_name} or do {
+            warn "Unknown subcommand '$sc_name'".($path ? " for $path":"")."\n";
+            return $res;
+        };
         $res->{subcommand} = $sc_name;
-        $res->{spec} = $sc_spec;
+        $sc_has_opts = $sc_spec->{options} &&
+            keys(%{$sc_spec->{options}});
+        push @ospecs, $sc_spec->{options} if $sc_has_opts;
+        $sc_has_subcommands = $sc_spec->{subcommands} &&
+            keys(%{$sc_spec->{subcommands}});
     }
 
-    {
-        # merge common options with subcommand options
-        my %ospecs;
-        if ($has_opts) {
-            $ospecs{$_} = $args->{options}{$_} for keys %{$args->{options}};
+    if ($sc_has_subcommands) {
+        # we still need to collect nested subcommand's options
+        $res->{subcommand_res} = _GetOptions(
+            $sc_spec, $main_cmdspec,
+            $level + 1,
+            $path . (length($path) ? "/$sc_name" : $sc_name),
+            @ospecs);
+        shift @ARGV; # reshift subcommand name because we use 'local' previously
+        $res->{success} = $res->{subcommand_res}{success};
+    } else {
+        # merge all option specifications into a single one to feed to
+        # Getopt::Long
+        my %ospec;
+        for my $os (@ospecs) {
+            $ospec{$_} = $os->{$_} for keys %$os;
         }
-        if ($has_subcommands && $sc_spec->{options} &&
-                keys %{ $sc_spec->{options} }) {
-            $ospecs{$_} = $sc_spec->{options}{$_}
-                for keys %{$sc_spec->{options}};
+        my $gl_res = _gl_getoptions('getopts', \%ospec, $res);
+        unless ($gl_res) {
+            $res->{success} = 0;
+            return $res;
         }
-        my $gl_res = _gl_getoptions('getopts', \%ospecs, $res);
-        return $res unless $gl_res;
+
         shift @ARGV; # reshift subcommand name because we use 'local' previously
         $res->{success} = 1;
     }
 
+    $log->tracef('Final @ARGV: %s', \@ARGV);
     $res;
 }
 
 sub GetOptions {
-    my %args = @_;
+    my %spec = @_;
 
-    my $res = _GetOptions(\%args);
+    my $res = _GetOptions(\%spec);
     return $res;
 
     my $shell;
@@ -114,7 +155,7 @@ sub GetOptions {
         shift @$words; $cword--; # strip program name
         my $compres = Complete::Getopt::Long::complete_cli_arg(
             words => $words, cword => $cword, getopt_spec=>{ @_ },
-            completion => $args{completion});
+            completion => $spec{completion});
 
         if ($shell eq 'bash') {
             print Complete::Bash::format_completion($compres);
@@ -206,32 +247,50 @@ B<STATUS: EARLY RELEASE, EXPERIMENTAL.>
 
 This module extends L<Getopt::Long> with subcommands and tab completion ability.
 
-How it works: it first parses C<@ARGV> for common options and subcommand name.
-After retrieving subcommand, it will parse again the remaining C<@ARGV> for
-subcommand-specific options.
+How parsing works: we first try to gather all options specifications. First is
+the common options. If there are subcommands, subcommand name is then first
+stripped from first element of C<@ARGV>. We then gather subcommand options. If
+subcommand also has nested subcommand, the process is repeated. Finally, we
+merged all options specifications into a single one and hand it off to
+L<Getopt::Long>.
 
-Completion: scripts using this module can complete themselves. Just put your
+then retrieved from the first element of C<@ARGV>. After that, subcommand
+options will be parsed from C<@ARGV>. If subcommand has a nested subcommand, the
+process is repeated.
+
+Completion: Scripts using this module can complete themselves. Just put your
 script somewhere in your C<PATH> and run something like this in your bash shell:
 C<complete -C script-name script-name>. See also L<shcompgen> to manage
-completion scripts for multiple applications easily. C<GetOptions> will detect
-C<COMP_LINE> or C<COMMAND_LINE> (for tcsh) and provide completion answer.
+completion scripts for multiple applications easily.
+
+How completion works: Eenvironment variable C<COMP_LINE> or C<COMMAND_LINE> (for
+tcsh) is first checked. If it exists, we are in completion mode and C<@ARGV> is
+parsed/formed from it. We then gather and merge all options specifications just
+like normal parsing. Finally we hand it off to L<Complete::Getopt::Long>.
 
 
 =head1 FUNCTIONS
 
-=head2 GetOptions(%args) => bool
+=head2 GetOptions(%cmdspec) => hash
 
-Exported by default. Process options and remove them from C<@ARGV> (thus
-modifying it). Return false on failure and hashref on success. The hashref will
-contain these keys: C<subcommand> (subcommand name, string or array of strings
-on nested subcommands), C<spec> (subcommand spec hash, or the reference to the
-main spec (C<%args>) if there is no subcommand).
+Exported by default.
+
+Process options and/or subcommand names specified in C<%cmdspec>, and remove
+them from C<@ARGV> (thus modifying it). Will warn to STDERR on errors. Actual
+command-line options parsing will be done using L<Getopt::Long>.
+
+Return hash structure, with these keys: C<success> (bool, false if parsing
+options failed e.g. unknown option/subcommand, illegal option value, etc),
+C<subcommand> (str, subcommand name, if there is any), C<subcommand_res> (hash,
+result of subcommand parsing, if there is nested subcommand).
 
 Arguments:
 
 =over
 
 =item * summary => str
+
+Used by autohelp (not yet implemented).
 
 =item * options => hash
 
@@ -242,7 +301,29 @@ what you would feed to L<Getopt::Long>'s C<GetOptions>.
 
 A hash of subcommand name and its specification. The specification looks like
 C<GetOptions> argument, with keys like C<summary>, C<options>, C<subcommands>
-(nested subcommands is in todo list).
+(for nested subcommands).
+
+=back
+
+Differences with C<Getopt::Long>'s C<GetOptions>:
+
+=over
+
+=item *
+
+Accept a command/subcommand specification (C<%cmdspec>) instead of just options
+specification (C<%ospec>) like in C<Getopt::Long>).
+
+=item *
+
+This module's function returns hash instead of bool.
+
+=item *
+
+Coderefs in C<options> will receive an extra argument C<$res> which is the
+result hash (being built). So the arguments that the coderefs get is:
+
+ ($callback, $value, $res)
 
 =back
 
@@ -265,9 +346,11 @@ Instead of adding another function, you can use C<local>.
 Hooks (when there is missing subcommand, when Getopt::Long::GetOptions fails,
 ...).
 
-Nested subcommands.
-
 Autohelp.
+
+Summary for each option, e.g. perhaps C<< options => { 'opt1=s' =>
+{summary=>'...', getopt=>\$foo}} >> instead of just C<< options => { 'opt1=s' =>
+\$foo } >>. That is, we give a hashref for each option.
 
 autoversion.
 
