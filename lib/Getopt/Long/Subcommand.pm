@@ -52,13 +52,15 @@ sub _strip_opts_from_argv {
 }
 
 sub _GetOptions {
-    my ($cmdspec, $main_cmdspec, $level, $path, @ospecs) = @_;
+    my ($is_completion, $cmdspec, $main_cmdspec, $level, $path, $stash,
+        @ospecs) = @_;
 
     $main_cmdspec //= $cmdspec;
     $level //= 0;
     $path //= '';
     my $res = {success=>undef};
-    my $gl_res;
+    $stash //= {};
+    $res->{stash} = $stash;
 
     my $has_opts = $cmdspec->{options} && keys(%{$cmdspec->{options}});
     push @ospecs, $cmdspec->{options} if !@ospecs && $has_opts;
@@ -66,10 +68,23 @@ sub _GetOptions {
     my $has_subcommands = $cmdspec->{subcommands} &&
         keys(%{$cmdspec->{subcommands}});
 
+    my %ospec;
+
+    # XXX refactor. we do this in several places to make sure ospecs is filled
+    if ($is_completion) {
+        %ospec = ();
+        for my $os (@ospecs) {
+            $ospec{$_} = $os->{$_} for keys %$os;
+        }
+        $stash->{comp_ospecs}[$level] = \%ospec;
+    }
+
     # parse/strip all known options first, to get subcommand name from first
     # element of @ARGV
     my ($sc_name, $sc_spec, $sc_has_opts, $sc_has_subcommands);
     if ($has_subcommands) {
+        $stash->{comp_subcommands}[$level] = $cmdspec->{subcommands}
+            if $is_completion;
         local @ARGV = @ARGV;
         my %ospec;
         for my $os (@ospecs) {
@@ -78,14 +93,29 @@ sub _GetOptions {
         _strip_opts_from_argv(\%ospec) if @ospecs;
         shift @ARGV for 1..$level; # discard parent command names
         @ARGV or do {
-            warn "Missing subcommand".($path ? " for $path":"")."\n";
+            if ($is_completion) {
+                $stash->{comp_type} = 'subcommand';
+                $stash->{comp_subcommand_level} = $level;
+            } else {
+                warn "Missing subcommand".($path ? " for $path":"")."\n";
+                $res->{success} = 0;
+            }
             return $res;
         };
         $sc_name = shift @ARGV;
         $sc_spec = $cmdspec->{subcommands}{$sc_name} or do {
-            warn "Unknown subcommand '$sc_name'".($path ? " for $path":"")."\n";
+            if ($is_completion) {
+                $stash->{comp_type} = 'subcommand';
+                $stash->{comp_subcommand_level} = $level;
+            } else {
+                warn "Unknown subcommand '$sc_name'".
+                    ($path ? " for $path":"")."\n";
+                $res->{success} = 0;
+            }
             return $res;
         };
+        $stash->{subcommand} = $path .
+            (defined($sc_name) ? (length($path) ? "/$sc_name" : $sc_name) : '');
         $res->{subcommand} = $sc_name;
         $sc_has_opts = $sc_spec->{options} &&
             keys(%{$sc_spec->{options}});
@@ -94,29 +124,36 @@ sub _GetOptions {
             keys(%{$sc_spec->{subcommands}});
     }
 
+    %ospec = ();
+    for my $os (@ospecs) {
+        $ospec{$_} = $os->{$_} for keys %$os;
+    }
+    $stash->{comp_ospecs}[$level] = \%ospec if $is_completion;
+
     if ($sc_has_subcommands) {
         # we still need to collect nested subcommand's options
         $res->{subcommand_res} = _GetOptions(
+            $is_completion,
             $sc_spec, $main_cmdspec,
             $level + 1,
             $path . (length($path) ? "/$sc_name" : $sc_name),
+            $stash,
             @ospecs);
         shift @ARGV; # reshift subcommand name because we use 'local' previously
         $res->{success} = $res->{subcommand_res}{success};
     } else {
         # merge all option specifications into a single one to feed to
         # Getopt::Long
-        my %ospec;
-        for my $os (@ospecs) {
-            $ospec{$_} = $os->{$_} for keys %$os;
-        }
-        my $gl_res = _gl_getoptions('getopts', \%ospec, $res);
-        unless ($gl_res) {
-            $res->{success} = 0;
-            return $res;
-        }
 
-        shift @ARGV; # reshift subcommand name because we use 'local' previously
+        unless ($is_completion) {
+            my $gl_res = _gl_getoptions('getopts', \%ospec, $res);
+            unless ($gl_res) {
+                $res->{success} = 0;
+                return $res;
+            }
+
+            shift @ARGV; # reshift subcommand name because we use 'local' previously
+        }
         $res->{success} = 1;
     }
 
@@ -125,37 +162,60 @@ sub _GetOptions {
 }
 
 sub GetOptions {
-    my %spec = @_;
+    my %cmdspec = @_;
 
-    my $res = _GetOptions(\%spec);
-    return $res;
-
-    my $shell;
-    if ($ENV{COMP_SHELL}) {
-        ($shell = $ENV{COMP_SHELL}) =~ s!.+/!!;
-    } elsif ($ENV{COMMAND_LINE}) {
-        $shell = 'tcsh';
-    } else {
-        $shell = 'bash';
-    }
-
-    if ($ENV{COMP_LINE} || $ENV{COMMAND_LINE}) {
-        my ($words, $cword);
-        if ($ENV{COMP_LINE}) {
-            require Complete::Bash;
-            ($words,$cword) = @{Complete::Bash::parse_cmdline(undef,undef,'=')};
+    # figure out if we run in completion mode
+    my ($is_completion, $shell, $words, $cword);
+  CHECK_COMPLETION:
+    {
+        if ($ENV{COMP_SHELL}) {
+            ($shell = $ENV{COMP_SHELL}) =~ s!.+/!!;
         } elsif ($ENV{COMMAND_LINE}) {
-            require Complete::Tcsh;
             $shell = 'tcsh';
-            ($words, $cword) = @{ Complete::Tcsh::parse_cmdline() };
+        } else {
+            $shell = 'bash';
         }
 
-        require Complete::Getopt::Long;
+        if ($ENV{COMP_LINE} || $ENV{COMMAND_LINE}) {
+            if ($ENV{COMP_LINE}) {
+                $is_completion++;
+                require Complete::Bash;
+                ($words, $cword) = @{Complete::Bash::parse_cmdline(
+                    undef,undef,'=')};
+            } elsif ($ENV{COMMAND_LINE}) {
+                $is_completion++;
+                require Complete::Tcsh;
+                $shell = 'tcsh';
+                ($words, $cword) = @{ Complete::Tcsh::parse_cmdline() };
+            } else {
+                last CHECK_COMPLETION;
+            }
 
-        shift @$words; $cword--; # strip program name
+            shift @$words; $cword--; # strip program name
+            @ARGV = @$words;
+        }
+    }
+
+    my $res = _GetOptions($is_completion, \%cmdspec);
+
+    if ($is_completion) {
+        my $ospec = $res->{stash}{comp_ospecs}[-1];
+        require Complete::Getopt::Long;
         my $compres = Complete::Getopt::Long::complete_cli_arg(
-            words => $words, cword => $cword, getopt_spec=>{ @_ },
-            completion => $spec{completion});
+            words => $words, cword => $cword, getopt_spec=>$ospec,
+            extras => {
+                stash => $res->{stash},
+            },
+            completion => sub {
+                my %args = @_;
+
+                my $word  = $args{word} // '';
+                my $type  = $args{type};
+                my $stash = $args{stash};
+
+                $cmdspec{completion},
+            },
+        );
 
         if ($shell eq 'bash') {
             print Complete::Bash::format_completion($compres);
@@ -167,6 +227,12 @@ sub GetOptions {
 
         exit 0;
     }
+
+    # cleanup unneeded details
+    $res->{subcommand} = $res->{stash}{subcommand};
+    delete $res->{stash};
+    delete $res->{subcommand_res};
+    return $res;
 }
 
 1;
@@ -281,8 +347,8 @@ command-line options parsing will be done using L<Getopt::Long>.
 
 Return hash structure, with these keys: C<success> (bool, false if parsing
 options failed e.g. unknown option/subcommand, illegal option value, etc),
-C<subcommand> (str, subcommand name, if there is any), C<subcommand_res> (hash,
-result of subcommand parsing, if there is nested subcommand).
+C<subcommand> (str, subcommand name, if there is any; if there are nested
+subcommands then it will be a path separated name, e.g. C<sub1/subsub1>).
 
 Arguments:
 
