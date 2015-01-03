@@ -423,25 +423,6 @@ Instead of adding another function, you can use C<local>.
  # the original @ARGV is restored
 
 
-=head1 TODO
-
-Hooks (when there is missing subcommand, when Getopt::Long::GetOptions fails,
-...).
-
-Autohelp. With summaries already in the spec, it's easy to generate useful help
-message.
-
-Summary for each option, e.g. perhaps C<< options => { 'opt1=s' =>
-{summary=>'...', getopt=>\$foo}} >> instead of just C<< options => { 'opt1=s' =>
-\$foo } >>. That is, we give a hashref for each option.
-
-autoversion.
-
-Autocomplete subcommand name.
-
-Suggest correction for misspelled subcommand ('Did you mean foo?').
-
-
 =head1 SEE ALSO
 
 L<Getopt::Long>
