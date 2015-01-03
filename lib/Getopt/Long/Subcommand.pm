@@ -41,7 +41,7 @@ sub _gl_getoptions {
 
     my $old_conf = Getopt::Long::Configure(
         'no_ignore_case', 'bundling',
-        'pass_through',
+        ('pass_through') x !!($which eq 'strip'),
     );
     local $SIG{__WARN__} = sub{} if $which eq 'strip';
     $log->tracef('@ARGV before Getopt::Long::GetOptions: %s', \@ARGV);
