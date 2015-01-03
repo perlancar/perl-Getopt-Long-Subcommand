@@ -14,6 +14,11 @@ our @EXPORT = qw(
                     GetOptions
             );
 
+my @known_cmdspec_keys = qw(
+    options
+    subcommands
+);
+
 sub _gl_getoptions {
     require Getopt::Long;
 
@@ -54,6 +59,17 @@ sub _strip_opts_from_argv {
 sub _GetOptions {
     my ($is_completion, $cmdspec, $main_cmdspec, $level, $path, $stash,
         @ospecs) = @_;
+
+    # check command spec
+    {
+        use experimental 'smartmatch';
+        $log->tracef("Checking cmdspec keys: %s", [keys %$cmdspec]);
+        for (keys %$cmdspec) {
+            $_ ~~ @known_cmdspec_keys
+                or die "Unknown command specification key '$_'" .
+                    ($path ? " (under $path)" : "") . "\n";
+        }
+    }
 
     $main_cmdspec //= $cmdspec;
     $level //= 0;
