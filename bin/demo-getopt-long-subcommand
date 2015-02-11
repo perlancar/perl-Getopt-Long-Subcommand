@@ -48,7 +48,6 @@ my $res = GetOptions(
     },
     completion => sub {
         my %args = @_;
-        use DD; dd \%args;
         my $subc  = $args{subcommand};
         my $word  = $args{word};
         my $ospec = $args{ospec} // '';
