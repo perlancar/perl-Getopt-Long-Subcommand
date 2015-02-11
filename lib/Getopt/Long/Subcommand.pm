@@ -14,36 +14,48 @@ our @EXPORT = qw(
                     GetOptions
             );
 
+# XXX completion is actually only allowed at the top-level
 my @known_cmdspec_keys = qw(
     options
     subcommands
+    summary description
+    completion
 );
+
+sub _cmdspec_opts_to_gl_ospec {
+    my ($cmdspec_opts, $is_completion, $res) = @_;
+    return { map {
+        if ($is_completion) {
+            # we don't want side-effects during completion (handler printing or
+            # existing, etc), so we set an empty coderef for all handlers.
+            ($_ => sub{});
+        } else {
+            my $k = $_;
+            my $v = $cmdspec_opts->{$k};
+            my $handler = ref($v) eq 'HASH' ? $v->{handler} : $v;
+            if (ref($handler) eq 'CODE') {
+                my $orig_handler = $handler;
+                $handler = sub {
+                    my ($cb, $val) = @_;
+                    $orig_handler->($cb, $val, $res);
+                };
+            }
+            ($k => $handler);
+        }
+    } keys %$cmdspec_opts };
+}
 
 sub _gl_getoptions {
     require Getopt::Long;
 
-    my ($which, $ospec0, $res) = @_;
-    $log->tracef('Performing Getopt::Long::GetOptions (%s)', $which);
-
-    my $ospec;
-    if ($which eq 'strip') {
-        $ospec = { map {$_=>sub{}} keys %$ospec0 };
-    } else {
-        $ospec = { map {
-            my $k = $_;
-            $k => (
-                ref($ospec0->{$k}) eq 'CODE' ? sub {
-                    my ($cb, $val) = @_;
-                    $ospec0->{$k}->($cb, $val, $res);
-                } : $ospec0->{$k}
-            )} keys %$ospec0 };
-    }
+    my ($ospec, $pass_through) = @_;
+    $log->tracef('Performing Getopt::Long::GetOptions');
 
     my $old_conf = Getopt::Long::Configure(
         'no_ignore_case', 'bundling',
-        ('pass_through') x !!($which eq 'strip'),
+        ('pass_through') x !!$pass_through,
     );
-    local $SIG{__WARN__} = sub{} if $which eq 'strip';
+    local $SIG{__WARN__} = sub {} if $pass_through;
     $log->tracef('@ARGV before Getopt::Long::GetOptions: %s', \@ARGV);
     $log->tracef('spec for Getopt::Long::GetOptions: %s', $ospec);
     my $gl_res = Getopt::Long::GetOptions(%$ospec);
@@ -52,13 +64,14 @@ sub _gl_getoptions {
     $gl_res;
 }
 
-sub _strip_opts_from_argv {
-    _gl_getoptions('strip', @_);
-}
-
 sub _GetOptions {
-    my ($is_completion, $cmdspec, $main_cmdspec, $level, $path, $stash,
-        @ospecs) = @_;
+    my ($cmdspec, $is_completion, $res, $stash) = @_;
+
+    $res //= {success=>undef};
+    $stash //= {
+        path => '', # for displaying error message
+        level => 0,
+    };
 
     # check command spec
     {
@@ -67,113 +80,74 @@ sub _GetOptions {
         for (keys %$cmdspec) {
             $_ ~~ @known_cmdspec_keys
                 or die "Unknown command specification key '$_'" .
-                    ($path ? " (under $path)" : "") . "\n";
+                    ($stash->{path} ? " (under $stash->{path})" : "") . "\n";
         }
     }
 
-    $main_cmdspec //= $cmdspec;
-    $level //= 0;
-    $path //= '';
-    my $res = {success=>undef};
-    $stash //= {};
-    $res->{stash} = $stash;
-
     my $has_opts = $cmdspec->{options} && keys(%{$cmdspec->{options}});
-    push @ospecs, $cmdspec->{options} if !@ospecs && $has_opts;
+    unless ($has_opts) {
+        $res->{success} = 1;
+        return $res;
+    }
 
     my $has_subcommands = $cmdspec->{subcommands} &&
         keys(%{$cmdspec->{subcommands}});
+    my $pass_through = $has_subcommands || $is_completion;
 
-    my %ospec;
+    my $ospec = _cmdspec_opts_to_gl_ospec(
+        $cmdspec->{options}, $is_completion, $res);
+    unless (_gl_getoptions($ospec, $pass_through)) {
+        $res->{success} = 0;
+        return $res;
+    }
 
-    # XXX refactor. we do this in several places to make sure ospecs is filled
+    # for doing completion
     if ($is_completion) {
-        %ospec = ();
-        for my $os (@ospecs) {
-            $ospec{$_} = $os->{$_} for keys %$os;
+        $res->{comp_ospec} //= {};
+        for (keys %$ospec) {
+            $res->{comp_ospec}{$_} = $ospec->{$_};
         }
-        $stash->{comp_ospecs}[$level] = \%ospec;
     }
 
-    # parse/strip all known options first, to get subcommand name from first
-    # element of @ARGV
-    my ($sc_name, $sc_spec, $sc_has_opts, $sc_has_subcommands);
     if ($has_subcommands) {
-        $stash->{comp_subcommands}[$level] = $cmdspec->{subcommands}
-            if $is_completion;
-        local @ARGV = @ARGV;
-        my %ospec;
-        for my $os (@ospecs) {
-            $ospec{$_} = $os->{$_} for keys %$os;
+        # for doing completion of subcommand names
+        if ($is_completion) {
+            $res->{comp_subcommand_names}[$stash->{level}] =
+                [sort keys %{$cmdspec->{subcommands}}];
         }
-        _strip_opts_from_argv(\%ospec) if @ospecs;
-        shift @ARGV for 1..$level; # discard parent command names
-        @ARGV or do {
-            if ($is_completion) {
-                $stash->{comp_type} = 'subcommand';
-                $stash->{comp_subcommand_level} = $level;
-            } else {
-                warn "Missing subcommand".($path ? " for $path":"")."\n";
-                $res->{success} = 0;
-            }
+
+        unless (@ARGV) {
+            warn "Missing subcommand".
+                ($stash->{path} ? " for $stash->{path}":"")."\n"
+                    unless $is_completion;
+            $res->{success} = 0;
+            return $res;
+        }
+        my $sc_name = shift @ARGV;
+
+        # for doing completion of subcommand names
+        if ($is_completion) {
+            push @{ $res->{comp_subcommand_name} }, $sc_name;
+        }
+
+        my $sc_spec = $cmdspec->{subcommands}{$sc_name};
+        unless ($sc_spec) {
+            warn "Unknown subcommand '$sc_name'".
+                ($stash->{path} ? " for $stash->{path}":"")."\n"
+                    unless $is_completion;
+            $res->{success} = 0;
             return $res;
         };
-        $sc_name = shift @ARGV;
-        $sc_spec = $cmdspec->{subcommands}{$sc_name} or do {
-            if ($is_completion) {
-                $stash->{comp_type} = 'subcommand';
-                $stash->{comp_subcommand_level} = $level;
-            } else {
-                warn "Unknown subcommand '$sc_name'".
-                    ($path ? " for $path":"")."\n";
-                $res->{success} = 0;
-            }
-            return $res;
-        };
-        $stash->{subcommand} = $path .
-            (defined($sc_name) ? (length($path) ? "/$sc_name" : $sc_name) : '');
-        $res->{subcommand} = $sc_name;
-        $sc_has_opts = $sc_spec->{options} &&
-            keys(%{$sc_spec->{options}});
-        push @ospecs, $sc_spec->{options} if $sc_has_opts;
-        $sc_has_subcommands = $sc_spec->{subcommands} &&
-            keys(%{$sc_spec->{subcommands}});
+        $res->{subcommand} //= [];
+        push @{ $res->{subcommand} }, $sc_name;
+        local $stash->{path} = ($stash->{path} ? "/" : "") . $sc_name;
+        local $stash->{level} = $stash->{level}+1;
+        _GetOptions($sc_spec, $is_completion, $res, $stash);
     }
+    $res->{success} //= 1;
 
-    %ospec = ();
-    for my $os (@ospecs) {
-        $ospec{$_} = $os->{$_} for keys %$os;
-    }
-    $stash->{comp_ospecs}[$level] = \%ospec if $is_completion;
-
-    if ($sc_has_subcommands) {
-        # we still need to collect nested subcommand's options
-        $res->{subcommand_res} = _GetOptions(
-            $is_completion,
-            $sc_spec, $main_cmdspec,
-            $level + 1,
-            $path . (length($path) ? "/$sc_name" : $sc_name),
-            $stash,
-            @ospecs);
-        shift @ARGV; # reshift subcommand name because we use 'local' previously
-        $res->{success} = $res->{subcommand_res}{success};
-    } else {
-        # merge all option specifications into a single one to feed to
-        # Getopt::Long
-
-        unless ($is_completion) {
-            my $gl_res = _gl_getoptions('getopts', \%ospec, $res);
-            unless ($gl_res) {
-                $res->{success} = 0;
-                return $res;
-            }
-
-            shift @ARGV; # reshift subcommand name because we use 'local' previously
-        }
-        $res->{success} = 1;
-    }
-
-    $log->tracef('Final @ARGV: %s', \@ARGV);
+    $log->tracef('Final @ARGV: %s', \@ARGV) unless $stash->{path};
+    $log->tracef('TMP: stash=%s', $stash);
     $res;
 }
 
@@ -212,10 +186,10 @@ sub GetOptions {
         }
     }
 
-    my $res = _GetOptions($is_completion, \%cmdspec);
+    my $res = _GetOptions(\%cmdspec, $is_completion);
 
     if ($is_completion) {
-        my $ospec = $res->{stash}{comp_ospecs}[-1];
+        my $ospec = $res->{comp_ospec};
         require Complete::Getopt::Long;
         my $compres = Complete::Getopt::Long::complete_cli_arg(
             words => $words, cword => $cword, getopt_spec=>$ospec,
@@ -229,7 +203,19 @@ sub GetOptions {
                 my $type  = $args{type};
                 my $stash = $args{stash};
 
-                $cmdspec{completion},
+                # complete subcommand names
+                if ($type eq 'arg' &&
+                        $args{argpos} < @{$res->{comp_subcommand_names}//[]}) {
+                    require Complete::Util;
+                    return Complete::Util::complete_array_elem(
+                        array => $res->{comp_subcommand_names}[$args{argpos}],
+                        word  => $res->{comp_subcommand_name}[$args{argpos}],
+                    );
+                }
+
+                $args{getopt_res} = $res;
+                $args{subcommand} = $res->{comp_subcommand_name}[-1];
+                $cmdspec{completion}->(%args) if $cmdspec{completion};
             },
         );
 
@@ -245,10 +231,8 @@ sub GetOptions {
     }
 
     # cleanup unneeded details
-    $res->{subcommand} = $res->{stash}{subcommand};
-    delete $res->{stash};
-    delete $res->{subcommand_res};
-    return $res;
+
+    $res;
 }
 
 1;
@@ -264,20 +248,26 @@ sub GetOptions {
 
      # common options recognized by all subcommands
      options => {
-         'help|h|?' => sub {
-             my ($cb, $val, $res) = @_;
-             if ($res->{subcommand}) {
-                 say "Help message for $res->{subcommand} ...";
-             } else {
-                 say "General help message ...";
-             }
-             exit 0;
+         'help|h|?' => {
+             summary => 'Display help message',
+             handler => sub {
+                 my ($cb, $val, $res) = @_;
+                 if ($res->{subcommand}) {
+                     say "Help message for $res->{subcommand} ...";
+                 } else {
+                     say "General help message ...";
+                 }
+                 exit 0;
+             },
+         'version|v' => {
+             summary => 'Display program version',
+             handler => sub {
+                 say "Program version $main::VERSION";
+                 exit 0;
+             },
+         'verbose' => {
+             handler => \$opts{verbose},
          },
-         'version|v' => sub {
-             say "Program version $main::VERSION";
-             exit 0;
-         },
-         'verbose' => \$opts{verbose},
      },
 
      # list your subcommands here
@@ -286,7 +276,9 @@ sub GetOptions {
              summary => 'The first subcommand',
              # subcommand-specific options
              options => {
-                 'foo=i' => \$opts{foo},
+                 'foo=i' => {
+                     handler => \$opts{foo},
+                 },
              },
          },
          subcmd1 => {

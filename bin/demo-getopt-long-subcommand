@@ -7,45 +7,15 @@ use 5.010;
 use strict;
 use warnings;
 use Complete::Util qw(complete_array_elem);
-use Getopt::Long::Subcommand qw(GetOptionsWithSubcommand);
+use Getopt::Long::Subcommand qw(GetOptions);
 
-my $res = GetOptionsWithSubcommand(
+my %Opts;
+my $res = GetOptions(
     summary => 'Command with subcommands',
     # generic options
     options => {
-        'help|h|?' => sub {
-            say <<_;
-Usage:
-  $0 --help
-  $0 --version
-  $0 <subcommand> [generic options] [subcommand options]
-
-Subcommands:
-  subc1 - First subcommand
-  subc2 - Second subcommand
-  subc3 - Third subcommand
-
-Generic options:
-  --help, -h, -?
-  --version, -v
-  --verbose
-
-Options for subcommand subc1:
-  ...
-
-Options for subcommand subc2:
-  ...
-
-Options for subcommand subc3:
-  ...
-_
-            exit 0;
-        },
-        'version|v' => sub {
-            no warnings;
-            say "$0 version $main::VERSION";
-            exit 0;
-        },
+        'help|h|?' => \$Opts{help},
+        'version|v' => \$Opts{version},
         'verbose' => sub {},
     },
     subcommands => {
@@ -78,6 +48,7 @@ _
     },
     completion => sub {
         my %args = @_;
+        use DD; dd \%args;
         my $subc  = $args{subcommand};
         my $word  = $args{word};
         my $ospec = $args{ospec} // '';
@@ -98,6 +69,41 @@ _
         }
     },
 );
+
+if ($Opts{help}) {
+    say <<_;
+Usage:
+  $0 --help
+  $0 --version
+  $0 <subcommand> [generic options] [subcommand options]
+
+Subcommands:
+  subc1 - First subcommand
+  subc2 - Second subcommand
+  subc3 - Third subcommand
+
+Generic options:
+  --help, -h, -?
+  --version, -v
+  --verbose
+
+Options for subcommand subc1:
+  ...
+
+Options for subcommand subc2:
+  ...
+
+Options for subcommand subc3:
+  ...
+_
+    exit 0;
+}
+
+if ($Opts{version}) {
+    no warnings;
+    say "$0 version $main::VERSION";
+    exit 0;
+}
 
 #say $res ? "Getopt failed" : "Getopt succeeded";
 # ABSTRACT: Script to demonstrate Getopt::Long::Subcommand
