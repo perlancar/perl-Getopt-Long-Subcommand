@@ -244,6 +244,7 @@ sub GetOptions {
 
  my %opts;
  my $res = GetOptions(
+
      summary => 'Summary about your program ...',
 
      # common options recognized by all subcommands
@@ -289,6 +290,16 @@ sub GetOptions {
              },
          },
      },
+
+     # tell how to complete option value and arguments. see
+     # Getopt::Long::Complete for more details, the arguments are the same
+     # except there is an additional 'subcommand' that gives the subcommand
+     # name.
+     completion => sub {
+         my %args = @_;
+         ...
+     },
+
  );
  die "GetOptions failed!\n" unless $res->{success};
  say "Running subcommand $res->{subcommand} ...";
@@ -321,26 +332,21 @@ B<STATUS: EARLY RELEASE, EXPERIMENTAL.>
 
 This module extends L<Getopt::Long> with subcommands and tab completion ability.
 
-How parsing works: we first try to gather all options specifications. First is
-the common options. If there are subcommands, subcommand name is then first
-stripped from first element of C<@ARGV>. We then gather subcommand options. If
-subcommand also has nested subcommand, the process is repeated. Finally, we
-merged all options specifications into a single one and hand it off to
-L<Getopt::Long>.
-
-then retrieved from the first element of C<@ARGV>. After that, subcommand
-options will be parsed from C<@ARGV>. If subcommand has a nested subcommand, the
-process is repeated.
+How parsing works: First we call C<Getopt::Long::GetOptions> with the top-level
+options, passing through unknown options if we have subcommands. Then,
+subcommand name is taken from the first argument. If subcommand has options, the
+process is repeated. So C<Getopt::Long::GetOptions> is called once at every
+level.
 
 Completion: Scripts using this module can complete themselves. Just put your
 script somewhere in your C<PATH> and run something like this in your bash shell:
 C<complete -C script-name script-name>. See also L<shcompgen> to manage
 completion scripts for multiple applications easily.
 
-How completion works: Eenvironment variable C<COMP_LINE> or C<COMMAND_LINE> (for
+How completion works: Environment variable C<COMP_LINE> or C<COMMAND_LINE> (for
 tcsh) is first checked. If it exists, we are in completion mode and C<@ARGV> is
-parsed/formed from it. We then gather and merge all options specifications just
-like normal parsing. Finally we hand it off to L<Complete::Getopt::Long>.
+parsed/formed from it. We then perform parsing to get subcommand names. Finally
+we hand it off to L<Complete::Getopt::Long>.
 
 
 =head1 FUNCTIONS
@@ -355,8 +361,8 @@ command-line options parsing will be done using L<Getopt::Long>.
 
 Return hash structure, with these keys: C<success> (bool, false if parsing
 options failed e.g. unknown option/subcommand, illegal option value, etc),
-C<subcommand> (str, subcommand name, if there is any; if there are nested
-subcommands then it will be a path separated name, e.g. C<sub1/subsub1>).
+C<subcommand> (array of str, subcommand name, if there is any; nested
+subcommands will be listed in order, e.g. C<< ["sub1", "subsub1"] >>).
 
 Arguments:
 
