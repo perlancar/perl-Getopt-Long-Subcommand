@@ -215,7 +215,7 @@ sub GetOptions {
                 }
 
                 $args{getopt_res} = $res;
-                $args{subcommand} = $res->{comp_subcommand_name}[-1];
+                $args{subcommand} = $res->{comp_subcommand_name};
                 $cmdspec{completion}->(%args) if $cmdspec{completion};
             },
         );
