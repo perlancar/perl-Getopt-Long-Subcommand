@@ -1,5 +1,13 @@
 Revision history for Getopt-Long-Subcommand
 
+0.03    2015-03-09 (PERLANCAR)
+
+        - [Incompatible change] 'subcommand' passed to completion routine is now
+          an array instead of string.
+
+        - Demo nested subcommand in demo script.
+
+
 0.02    2015-02-12 (PERLANCAR)
 
 	- No functional changes.
