@@ -8,6 +8,7 @@ use strict;
 use warnings;
 use Complete::Util qw(complete_array_elem);
 use Getopt::Long::Subcommand qw(GetOptions);
+use Log::Any::IfLOG '$log';
 
 my %Opts;
 my $res = GetOptions(
@@ -44,6 +45,19 @@ my $res = GetOptions(
                 'int-comp-array=i' => sub{},
                 'str-comp-sub=s' => sub{},
             },
+            subcommands => {
+                subsubc1 => {
+                    summary => 'First subsubcommand',
+                    options => {
+                        'str|text|S=s' => sub{},
+                        'array=s@' => sub{},
+                        'city=s' => sub {},
+                    },
+                },
+                subsubc2 => {
+                    summary => 'Second subsubcommand',
+                },
+            },
         },
     },
     completion => sub {
@@ -52,16 +66,21 @@ my $res = GetOptions(
         my $word  = $args{word};
         my $ospec = $args{ospec} // '';
 
+        $log->tracef("subc: %s", $subc);
         if ($ospec eq 'int-comp-array=i') {
             return complete_array_elem(array=>[1..10], word=>$word);
         } elsif ($ospec eq 'str-comp-sub=s') {
             return complete_array_elem(array=>[map {"$word$_"} "a".."z"],
                                        word=>$word);
-        } elsif ($subc eq 'subc1' && $ospec eq 'fruit=s') {
+        } elsif ($subc->[0] eq 'subc1' && $ospec eq 'fruit=s') {
             return complete_array_elem(array=>[qw/apple apricot avocado/],
                                        word=>$word);
-        } elsif ($subc eq 'subc2' && $ospec eq 'fruit=s') {
+        } elsif ($subc->[0] eq 'subc2' && $ospec eq 'fruit=s') {
             return complete_array_elem(array=>[qw/banana blueberry blackberry/],
+                                       word=>$word);
+        } elsif ($subc->[0] eq 'subc3' && $subc->[1] eq 'subsubc1'
+                     && $ospec eq 'city=s') {
+            return complete_array_elem(array=>[qw/bandung solo surabaya/],
                                        word=>$word);
         } else {
             return undef;
