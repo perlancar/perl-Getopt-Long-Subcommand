@@ -171,8 +171,7 @@ sub GetOptions {
             if ($ENV{COMP_LINE}) {
                 $is_completion++;
                 require Complete::Bash;
-                ($words, $cword) = @{Complete::Bash::parse_cmdline(
-                    undef,undef,'=')};
+                ($words, $cword) = @{ Complete::Bash::parse_cmdline() };
             } elsif ($ENV{COMMAND_LINE}) {
                 $is_completion++;
                 require Complete::Tcsh;
