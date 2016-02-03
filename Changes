@@ -1,5 +1,10 @@
 Revision history for Getopt-Long-Subcommand
 
+0.05    2016-02-03 (PERLANCAR)
+
+	- Adjust to Complete::Bash 0.27.
+
+
 0.04    2015-12-30 (PERLANCAR)
 
 	- [ux] Use Complete::Bash's new truncate_current_word option for
