@@ -1,5 +1,10 @@
 Revision history for Getopt-Long-Subcommand
 
+0.06    2016-12-02 (PERLANCAR)
+
+	- Set Getopt::Long configuration no_getopt_compat & gnu_compat.
+
+
 0.05    2016-02-03 (PERLANCAR)
 
 	- Adjust to Complete::Bash 0.27.
