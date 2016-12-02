@@ -52,7 +52,7 @@ sub _gl_getoptions {
     $log->tracef('[comp][glsubc] Performing Getopt::Long::GetOptions');
 
     my $old_conf = Getopt::Long::Configure(
-        'no_ignore_case', 'bundling',
+        'no_ignore_case', 'bundling', 'no_getopt_compat', 'gnu_compat',
         ('pass_through') x !!$pass_through,
     );
     local $SIG{__WARN__} = sub {} if $pass_through;
