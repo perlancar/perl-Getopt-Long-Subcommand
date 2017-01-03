@@ -75,11 +75,10 @@ sub _GetOptions {
 
     # check command spec
     {
-        use experimental 'smartmatch';
         #$log->tracef("[comp][glsubc] Checking cmdspec keys: %s", [keys %$cmdspec]);
-        for (keys %$cmdspec) {
-            $_ ~~ @known_cmdspec_keys
-                or die "Unknown command specification key '$_'" .
+        for my $k (keys %$cmdspec) {
+            (grep { $_ eq $k } @known_cmdspec_keys)
+                or die "Unknown command specification key '$k'" .
                     ($stash->{path} ? " (under $stash->{path})" : "") . "\n";
         }
     }
