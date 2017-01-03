@@ -6,7 +6,7 @@ package Getopt::Long::Subcommand;
 use 5.010001;
 use strict;
 use warnings;
-use Log::Any::IfLOG '$log';
+#use Log::Any::IfLOG '$log';
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -49,17 +49,17 @@ sub _gl_getoptions {
     require Getopt::Long;
 
     my ($ospec, $pass_through) = @_;
-    $log->tracef('[comp][glsubc] Performing Getopt::Long::GetOptions');
+    #$log->tracef('[comp][glsubc] Performing Getopt::Long::GetOptions');
 
     my $old_conf = Getopt::Long::Configure(
         'no_ignore_case', 'bundling', 'no_getopt_compat', 'gnu_compat',
         ('pass_through') x !!$pass_through,
     );
     local $SIG{__WARN__} = sub {} if $pass_through;
-    $log->tracef('[comp][glsubc] @ARGV before Getopt::Long::GetOptions: %s', \@ARGV);
-    $log->tracef('[comp][glsubc] spec for Getopt::Long::GetOptions: %s', $ospec);
+    #$log->tracef('[comp][glsubc] @ARGV before Getopt::Long::GetOptions: %s', \@ARGV);
+    #$log->tracef('[comp][glsubc] spec for Getopt::Long::GetOptions: %s', $ospec);
     my $gl_res = Getopt::Long::GetOptions(%$ospec);
-    $log->tracef('[comp][glsubc] @ARGV after  Getopt::Long::GetOptions: %s', \@ARGV);
+    #$log->tracef('[comp][glsubc] @ARGV after  Getopt::Long::GetOptions: %s', \@ARGV);
     Getopt::Long::Configure($old_conf);
     $gl_res;
 }
@@ -76,7 +76,7 @@ sub _GetOptions {
     # check command spec
     {
         use experimental 'smartmatch';
-        $log->tracef("[comp][glsubc] Checking cmdspec keys: %s", [keys %$cmdspec]);
+        #$log->tracef("[comp][glsubc] Checking cmdspec keys: %s", [keys %$cmdspec]);
         for (keys %$cmdspec) {
             $_ ~~ @known_cmdspec_keys
                 or die "Unknown command specification key '$_'" .
@@ -146,7 +146,7 @@ sub _GetOptions {
     }
     $res->{success} //= 1;
 
-    $log->tracef('[comp][glsubc] Final @ARGV: %s', \@ARGV) unless $stash->{path};
+    #$log->tracef('[comp][glsubc] Final @ARGV: %s', \@ARGV) unless $stash->{path};
     #$log->tracef('[comp][glsubc] TMP: stash=%s', $stash);
     #$log->tracef('[comp][glsubc] TMP: res=%s', $res);
     $res;

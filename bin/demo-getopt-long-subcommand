@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use Complete::Util qw(complete_array_elem);
 use Getopt::Long::Subcommand qw(GetOptions);
-use Log::Any::IfLOG '$log';
+#use Log::Any::IfLOG '$log';
 
 my %Opts;
 my $res = GetOptions(
@@ -66,7 +66,7 @@ my $res = GetOptions(
         my $word  = $args{word};
         my $ospec = $args{ospec} // '';
 
-        $log->tracef("subc: %s", $subc);
+        #$log->tracef("subc: %s", $subc);
         if ($ospec eq 'int-comp-array=i') {
             return complete_array_elem(array=>[1..10], word=>$word);
         } elsif ($ospec eq 'str-comp-sub=s') {
