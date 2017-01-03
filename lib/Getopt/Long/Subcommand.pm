@@ -329,8 +329,6 @@ To run your script:
 
 =head1 DESCRIPTION
 
-B<STATUS: EARLY RELEASE, EXPERIMENTAL.>
-
 This module extends L<Getopt::Long> with subcommands and tab completion ability.
 
 How parsing works: First we call C<Getopt::Long::GetOptions> with the top-level
