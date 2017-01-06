@@ -18,6 +18,7 @@ our @EXPORT = qw(
 my @known_cmdspec_keys = qw(
     options
     subcommands
+    default_subcommand
     summary description
     completion
 );
@@ -130,21 +131,22 @@ sub _GetOptions {
 
         $res->{subcommand} //= [];
 
-        unless (@ARGV) {
-            # no subcommand name
-            $res->{success} = 1;
-            return $res;
-        }
-
         my $push;
         my $sc_name;
 
         if (defined $res->{subcommand}[ $stash->{level} ]) {
             # subcommand has been set, e.g. by option handler
             $sc_name = $res->{subcommand}[ $stash->{level} ];
-        } else {
+        } elsif (@ARGV) {
             $sc_name = shift @ARGV;
             $push++; # we need to push to $res->{subcommand} later
+        } elsif (defined $cmdspec->{default_subcommand}) {
+            $sc_name = $cmdspec->{default_subcommand};
+            $push++;
+        } else {
+            # no subcommand
+            $res->{success} = 1;
+            return $res;
         }
 
         # for doing completion of subcommand names
@@ -402,6 +404,14 @@ what you would feed to L<Getopt::Long>'s C<GetOptions>.
 A hash of subcommand name and its specification. The specification looks like
 C<GetOptions> argument, with keys like C<summary>, C<options>, C<subcommands>
 (for nested subcommands).
+
+=item * default_subcommand => str
+
+Default subcommand to use if no subcommand name is set. Subcommand can be set
+using the first argument, or your option handler can also set the subcommand
+using:
+
+ $_[2]{subcommand_name} = 'something';
 
 =back
 
