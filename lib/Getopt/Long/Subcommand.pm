@@ -116,10 +116,8 @@ sub _GetOptions {
         }
 
         unless (@ARGV) {
-            warn "Missing subcommand".
-                ($stash->{path} ? " for $stash->{path}":"")."\n"
-                    unless $is_completion;
-            $res->{success} = 0;
+            # no subcommand name
+            $res->{success} = 1;
             return $res;
         }
         my $sc_name = shift @ARGV;
