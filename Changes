@@ -1,5 +1,16 @@
 Revision history for Getopt-Long-Subcommand
 
+0.08    2017-01-06 (PERLANCAR)
+
+	- Provide workaround $res->{_non_options_argv} to option handler so
+	  it can extract subcommand name from it when otherwise the
+	  subcommand name has been specified and consumed by Getopt::Long
+	  from @ARGV.
+
+	- [Incompatible change] Allow subcommand being unspecified, don't
+	  regard it as a fail (success=0), but as a success.
+
+
 0.07    2017-01-03 (PERLANCAR)
 
         - Remove experimental label.
