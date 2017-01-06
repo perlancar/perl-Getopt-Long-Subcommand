@@ -48,7 +48,7 @@ sub _cmdspec_opts_to_gl_ospec {
 sub _gl_getoptions {
     require Getopt::Long;
 
-    my ($ospec, $pass_through) = @_;
+    my ($ospec, $pass_through, $res) = @_;
     #$log->tracef('[comp][glsubc] Performing Getopt::Long::GetOptions');
 
     my $old_conf = Getopt::Long::Configure(
@@ -56,9 +56,22 @@ sub _gl_getoptions {
         ('pass_through') x !!$pass_through,
     );
     local $SIG{__WARN__} = sub {} if $pass_through;
+
+    # ugh, this is ugly. the problem we're trying to solve: in the case of 'subc
+    # --help', 'subc' is consumed first by Getopt::Long and thus removed from
+    # @ARGV. when --help handler wants to find out the subcommand name ('subc'),
+    # it doesn't have anywhere to look for. so we give it in $res which is
+    # passed as the third argument to the handler.
+    local $res->{_non_options_argv} = [];
+
     #$log->tracef('[comp][glsubc] @ARGV before Getopt::Long::GetOptions: %s', \@ARGV);
     #$log->tracef('[comp][glsubc] spec for Getopt::Long::GetOptions: %s', $ospec);
-    my $gl_res = Getopt::Long::GetOptions(%$ospec);
+    my $gl_res = Getopt::Long::GetOptions(
+        %$ospec,
+        '<>' => sub { push @{ $res->{_non_options_argv} }, $_[0] },
+    );
+    @ARGV = @{ $res->{_non_options_argv} };
+
     #$log->tracef('[comp][glsubc] @ARGV after  Getopt::Long::GetOptions: %s', \@ARGV);
     Getopt::Long::Configure($old_conf);
     $gl_res;
@@ -95,7 +108,7 @@ sub _GetOptions {
 
     my $ospec = _cmdspec_opts_to_gl_ospec(
         $cmdspec->{options}, $is_completion, $res);
-    unless (_gl_getoptions($ospec, $pass_through)) {
+    unless (_gl_getoptions($ospec, $pass_through, $res)) {
         $res->{success} = 0;
         return $res;
     }
