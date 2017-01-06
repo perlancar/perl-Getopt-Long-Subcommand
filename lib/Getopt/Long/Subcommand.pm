@@ -128,12 +128,24 @@ sub _GetOptions {
                 [sort keys %{$cmdspec->{subcommands}}];
         }
 
+        $res->{subcommand} //= [];
+
         unless (@ARGV) {
             # no subcommand name
             $res->{success} = 1;
             return $res;
         }
-        my $sc_name = shift @ARGV;
+
+        my $push;
+        my $sc_name;
+
+        if (defined $res->{subcommand}[ $stash->{level} ]) {
+            # subcommand has been set, e.g. by option handler
+            $sc_name = $res->{subcommand}[ $stash->{level} ];
+        } else {
+            $sc_name = shift @ARGV;
+            $push++; # we need to push to $res->{subcommand} later
+        }
 
         # for doing completion of subcommand names
         if ($is_completion) {
@@ -148,8 +160,7 @@ sub _GetOptions {
             $res->{success} = 0;
             return $res;
         };
-        $res->{subcommand} //= [];
-        push @{ $res->{subcommand} }, $sc_name;
+        push @{ $res->{subcommand} }, $sc_name if $push;
         local $stash->{path} = ($stash->{path} ? "/" : "") . $sc_name;
         local $stash->{level} = $stash->{level}+1;
         _GetOptions($sc_spec, $is_completion, $res, $stash);
