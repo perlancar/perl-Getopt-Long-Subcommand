@@ -16,6 +16,7 @@ our @EXPORT = qw(
 
 # XXX completion is actually only allowed at the top-level
 my @known_cmdspec_keys = qw(
+    configure
     options
     subcommands
     default_subcommand
@@ -49,13 +50,22 @@ sub _cmdspec_opts_to_gl_ospec {
 sub _gl_getoptions {
     require Getopt::Long;
 
-    my ($ospec, $pass_through, $res) = @_;
+    my ($ospec, $pass_through, $res, $configure) = @_;
     #$log->tracef('[comp][glsubc] Performing Getopt::Long::GetOptions');
-
-    my $old_conf = Getopt::Long::Configure(
-        'no_ignore_case', 'no_getopt_compat', 'gnu_compat', 'bundling',
-        ('pass_through') x !!$pass_through,
-    );
+    my @configures = ();
+    if ($configure && scalar @$configure > 0) {
+        for (@$configure) {
+            if ($_ ne 'pass_through'){
+                push @configures, $_;
+                next;
+            }
+            push @configures, ($_) x !!$pass_through;
+        }
+    }
+    else {
+        @configures = ( 'no_ignore_case', 'no_getopt_compat', 'gnu_compat', 'bundling', ('pass_through') x !!$pass_through );
+    }
+    my $old_conf = Getopt::Long::Configure(@configures);
     local $SIG{__WARN__} = sub {} if $pass_through;
 
     # ugh, this is ugly. the problem we're trying to solve: in the case of 'subc
@@ -109,7 +119,7 @@ sub _GetOptions {
 
     my $ospec = _cmdspec_opts_to_gl_ospec(
         $cmdspec->{options}, $is_completion, $res);
-    unless (_gl_getoptions($ospec, $pass_through, $res)) {
+    unless (_gl_getoptions($ospec, $pass_through, $res, $cmdspec->{configure})) {
         $res->{success} = 0;
         return $res;
     }
