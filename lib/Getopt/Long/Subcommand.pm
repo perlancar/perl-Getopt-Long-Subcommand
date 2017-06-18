@@ -14,13 +14,14 @@ our @EXPORT = qw(
                     GetOptions
             );
 
-# XXX completion is actually only allowed at the top-level
+# XXX completion & configure are actually only allowed at the top-level
 my @known_cmdspec_keys = qw(
     options
     subcommands
     default_subcommand
     summary description
     completion
+    configure
 );
 
 sub _cmdspec_opts_to_gl_ospec {
@@ -49,13 +50,21 @@ sub _cmdspec_opts_to_gl_ospec {
 sub _gl_getoptions {
     require Getopt::Long;
 
-    my ($ospec, $pass_through, $res) = @_;
+    my ($ospec, $configure, $pass_through, $res) = @_;
     #$log->tracef('[comp][glsubc] Performing Getopt::Long::GetOptions');
 
-    my $old_conf = Getopt::Long::Configure(
-        'no_ignore_case', 'no_getopt_compat', 'gnu_compat', 'bundling',
-        ('pass_through') x !!$pass_through,
-    );
+    my @configure = @{
+        $configure //
+            ['no_ignore_case', 'no_getopt_compat', 'gnu_compat', 'bundling']
+        };
+    if ($pass_through) {
+        push @configure, 'pass_through'
+            unless grep { 'pass_through' } @configure;
+    } else {
+        @configure = grep { $_ ne 'pass_through' } @configure;
+    }
+
+    my $old_conf = Getopt::Long::Configure(@configure);
     local $SIG{__WARN__} = sub {} if $pass_through;
 
     # ugh, this is ugly. the problem we're trying to solve: in the case of 'subc
@@ -109,7 +118,8 @@ sub _GetOptions {
 
     my $ospec = _cmdspec_opts_to_gl_ospec(
         $cmdspec->{options}, $is_completion, $res);
-    unless (_gl_getoptions($ospec, $pass_through, $res)) {
+    unless (_gl_getoptions(
+        $ospec, $cmdspec->{configure}, $pass_through, $res)) {
         $res->{success} = 0;
         return $res;
     }
@@ -194,8 +204,10 @@ sub GetOptions {
             if ($ENV{COMP_LINE}) {
                 $is_completion++;
                 require Complete::Bash;
-                ($words, $cword) = @{ Complete::Bash::parse_cmdline(undef, undef, {truncate_current_word=>1}) };
-                ($words, $cword) = @{ Complete::Bash::join_wordbreak_words($words, $cword) };
+                ($words, $cword) = @{ Complete::Bash::parse_cmdline(
+                    undef, undef, {truncate_current_word=>1}) };
+                ($words, $cword) = @{ Complete::Bash::join_wordbreak_words(
+                    $words, $cword) };
             } elsif ($ENV{COMMAND_LINE}) {
                 $is_completion++;
                 require Complete::Tcsh;
@@ -219,6 +231,17 @@ sub GetOptions {
             words => $words, cword => $cword, getopt_spec=>$ospec,
             extras => {
                 stash => $res->{stash},
+            },
+            bundling => do {
+                if (!$cmdspec{configure}) {
+                    1;
+                } elsif (grep { 'bundling' } @{ $cmdspec{configure} }) {
+                    1;
+                } elsif (grep { 'no_bundling' } @{ $cmdspec{configure} }) {
+                    0;
+                } else {
+                    0;
+                }
             },
             completion => sub {
                 my %args = @_;
@@ -412,6 +435,16 @@ using the first argument, or your option handler can also set the subcommand
 using:
 
  $_[2]{subcommand_name} = 'something';
+
+=item * configure => arrayref
+
+Custom Getopt::Long configuration. The default is:
+
+ ['no_ignore_case', 'no_getopt_compat', 'gnu_compat', 'bundling']
+
+Note that even though you use custom configuration here, the tab completion
+(performed by L<Complete::Getopt::Long> only supports C<no_ignore_case>,
+C<gnu_compat>, and C<no_getopt_compat>.
 
 =back
 
