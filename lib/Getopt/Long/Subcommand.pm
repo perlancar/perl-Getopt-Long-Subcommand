@@ -471,6 +471,16 @@ result hash (being built). So the arguments that the coderefs get is:
 =back
 
 
+=head1 CAVEATS
+
+=head2 Common options take precedence over subcommand options
+
+Common options (e.g. C<--help>) are parsed and removed from the command-line
+first. This is done for convenience so you can do something like C<cmd subc
+--help> or C<cmd --help subc> to get help. The consequence is you cannot have a
+subcommand option with the same name as common option.
+
+
 =head1 FAQ
 
 =head2 How to avoid modifying @ARGV? How to process from another array, like Getopt::Long's GetOptionsFromArray?
