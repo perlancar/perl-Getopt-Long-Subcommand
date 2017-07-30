@@ -58,10 +58,12 @@ sub _gl_getoptions {
         };
     if ($pass_through) {
         push @configure, 'pass_through'
-            unless grep { 'pass_through' } @configure;
+            unless grep { $_ eq 'pass_through' } @configure;
     } else {
         @configure = grep { $_ ne 'pass_through' } @configure;
     }
+    log_trace('[comp][glsubc] Performing Getopt::Long::GetOptions (pass_through=%s, configure: %s)',
+              $pass_through, \@configure);
 
     my $old_conf = Getopt::Long::Configure(@configure);
     local $SIG{__WARN__} = sub {} if $pass_through;
@@ -113,6 +115,7 @@ sub _GetOptions {
 
     my $has_subcommands = $cmdspec->{subcommands} &&
         keys(%{$cmdspec->{subcommands}});
+    log_trace("TMP:has_subcommands=%s", $has_subcommands);
     my $pass_through = $has_subcommands || $is_completion;
 
     my $ospec = _cmdspec_opts_to_gl_ospec(
@@ -277,7 +280,6 @@ sub GetOptions {
     }
 
     # cleanup unneeded details
-
     $res;
 }
 

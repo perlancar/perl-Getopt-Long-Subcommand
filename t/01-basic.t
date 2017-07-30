@@ -147,15 +147,14 @@ subtest "basics" => sub {
             is_deeply($res, {success => 0, subcommand => ['sc2']});
         };
 
-        #TODO, not working yet
-        # subtest "sc2 sc21 sc211" => sub {
-        #     @ARGV = (qw/sc2 sc21 sc211/);
-        #     my $res = GetOptions(@spec);
-        #     diag explain $res;
-        #     diag explain \@ARGV;
-        #     is_deeply(
-        #         $res, {success => 1, subcommand => ['sc2', 'sc21', 'sc211']});
-        # };
+        subtest "sc2 sc21 sc211" => sub {
+            @ARGV = (qw/sc2 sc21 sc211/);
+            my $res = GetOptions(@spec);
+            diag explain $res;
+            diag explain \@ARGV;
+            is_deeply(
+                $res, {success => 1, subcommand => ['sc2', 'sc21', 'sc211']});
+        };
         # subtest "unknown sub-sub-subcommand" => sub {
         #     @ARGV = (qw/sc2 sc21 foo/);
         #     my $res = GetOptions(@spec);
@@ -179,4 +178,5 @@ subtest "basics" => sub {
     };
 };
 
+DONE_TESTING:
 done_testing;
