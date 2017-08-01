@@ -58,6 +58,19 @@ subtest "basics" => sub {
                     },
                 },
             },
+            # to test cmdspec key 'configure'
+            sc3 => {
+                summary => 'Subcommand3 summary',
+                configure => ['ignore_case'],
+                options => {
+                    'Opt1|A=s' => {
+                        handler => sub { push @output, "set sc3.Opt1=$_[1]" },
+                    },
+                    'Opt2|B=s' => {
+                        handler => sub { push @output, "set sc3.Opt2=$_[1]" },
+                    },
+                },
+            },
         },
     );
 
@@ -69,7 +82,7 @@ subtest "basics" => sub {
         };
 
         subtest "unknown subcommand -> not success" => sub {
-            @ARGV = (qw/sc3/);
+            @ARGV = (qw/sc99/);
             my $res = GetOptions(@spec);
             is_deeply($res, {success => 0, subcommand => []});
         };
@@ -170,6 +183,23 @@ subtest "basics" => sub {
             my $res = GetOptions(@spec);
             is_deeply(
                 $res, {success => 0, subcommand => ['sc2', 'sc21', 'sc211']});
+        };
+    };
+
+    subtest "cmdspec 'configure'" => sub {
+        subtest "sc3 --opt1 X" => sub {
+            @output = ();
+            @ARGV = (qw/sc3 --opt1 X/);
+            my $res = GetOptions(@spec);
+            is_deeply(\@output, ['set sc3.Opt1=X']);
+            is_deeply($res, {success => 1, subcommand => ['sc3']});
+        };
+        subtest "sc1 --Opt1 X" => sub {
+            @output = ();
+            @ARGV = (qw/sc1 --Opt1 X/);
+            my $res = GetOptions(@spec);
+            is_deeply(\@output, []);
+            is_deeply($res, {success => 0, subcommand => ['sc1']});
         };
     };
 };

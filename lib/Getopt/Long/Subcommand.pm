@@ -62,7 +62,7 @@ sub _gl_getoptions {
     } else {
         @configure = grep { $_ ne 'pass_through' } @configure;
     }
-    log_trace('[comp][glsubc] Performing Getopt::Long::GetOptions (pass_through=%s, configure: %s)',
+    log_trace('[comp][glsubc] Performing Getopt::Long::GetOptions (configure: %s)',
               $pass_through, \@configure);
 
     my $old_conf = Getopt::Long::Configure(@configure);
@@ -109,7 +109,7 @@ sub _GetOptions {
 
     my $has_subcommands = $cmdspec->{subcommands} &&
         keys(%{$cmdspec->{subcommands}});
-    log_trace("TMP:has_subcommands=%s", $has_subcommands);
+    #log_trace("TMP:has_subcommands=%s", $has_subcommands);
     my $pass_through = $has_subcommands || $is_completion;
 
     my $ospec = _cmdspec_opts_to_gl_ospec(
@@ -176,8 +176,8 @@ sub _GetOptions {
     $res->{success} //= 1;
 
     log_trace('[comp][glsubc] Final @ARGV: %s', \@ARGV) unless $stash->{path};
-    log_trace('[comp][glsubc] TMP: stash=%s', $stash);
-    log_trace('[comp][glsubc] TMP: res=%s', $res);
+    #log_trace('[comp][glsubc] TMP: stash=%s', $stash);
+    #log_trace('[comp][glsubc] TMP: res=%s', $res);
     $res;
 }
 
