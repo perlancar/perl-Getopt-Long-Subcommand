@@ -481,6 +481,9 @@ first. This is done for convenience so you can do something like C<cmd subc
 --help> or C<cmd --help subc> to get help. The consequence is you cannot have a
 subcommand option with the same name as common option.
 
+Similarly, options for a subcommand takes precedence over its sub-subcommand,
+and so on.
+
 
 =head1 FAQ
 
