@@ -150,31 +150,27 @@ subtest "basics" => sub {
         subtest "sc2 sc21 sc211" => sub {
             @ARGV = (qw/sc2 sc21 sc211/);
             my $res = GetOptions(@spec);
-            diag explain $res;
-            diag explain \@ARGV;
             is_deeply(
                 $res, {success => 1, subcommand => ['sc2', 'sc21', 'sc211']});
         };
-        # subtest "unknown sub-sub-subcommand" => sub {
-        #     @ARGV = (qw/sc2 sc21 foo/);
-        #     my $res = GetOptions(@spec);
-        #     is_deeply($res, {success => 0, subcommand => ['sc2', 'sc21']});
-        # };
-        # subtest "sc2 sc21 sc211 sc2111" => sub {
-        #     @ARGV = (qw/sc2 sc21 sc211 sc2111/);
-        #     my $res = GetOptions(@spec);
-        #     diag explain $res;
-        #     diag explain \@ARGV;
-        #     is_deeply(
-        #         $res, {success => 1,
-        #                subcommand => [qw/sc2 sc21 sc211 sc2111/]});
-        # };
-        # subtest "unknown sub-sub-sub-subcommand" => sub {
-        #     @ARGV = (qw/sc2 sc21 sc211 foo/);
-        #     my $res = GetOptions(@spec);
-        #     is_deeply(
-        #         $res, {success => 0, subcommand => ['sc2', 'sc21', 'sc211']});
-        # };
+        subtest "unknown sub-sub-subcommand" => sub {
+            @ARGV = (qw/sc2 sc21 foo/);
+            my $res = GetOptions(@spec);
+            is_deeply($res, {success => 0, subcommand => ['sc2', 'sc21']});
+        };
+        subtest "sc2 sc21 sc211 sc2111" => sub {
+            @ARGV = (qw/sc2 sc21 sc211 sc2111/);
+            my $res = GetOptions(@spec);
+            is_deeply(
+                $res, {success => 1,
+                       subcommand => [qw/sc2 sc21 sc211 sc2111/]});
+        };
+        subtest "unknown sub-sub-sub-subcommand" => sub {
+            @ARGV = (qw/sc2 sc21 sc211 foo/);
+            my $res = GetOptions(@spec);
+            is_deeply(
+                $res, {success => 0, subcommand => ['sc2', 'sc21', 'sc211']});
+        };
     };
 };
 

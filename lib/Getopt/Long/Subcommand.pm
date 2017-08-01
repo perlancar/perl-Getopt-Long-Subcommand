@@ -107,12 +107,6 @@ sub _GetOptions {
         }
     }
 
-    my $has_opts = $cmdspec->{options} && keys(%{$cmdspec->{options}});
-    unless ($has_opts) {
-        $res->{success} = 1;
-        return $res;
-    }
-
     my $has_subcommands = $cmdspec->{subcommands} &&
         keys(%{$cmdspec->{subcommands}});
     log_trace("TMP:has_subcommands=%s", $has_subcommands);
