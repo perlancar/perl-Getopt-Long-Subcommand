@@ -231,9 +231,9 @@ sub GetOptions {
             bundling => do {
                 if (!$cmdspec{configure}) {
                     1;
-                } elsif (grep { 'bundling' } @{ $cmdspec{configure} }) {
+                } elsif (grep { $_ eq 'bundling' } @{ $cmdspec{configure} }) {
                     1;
-                } elsif (grep { 'no_bundling' } @{ $cmdspec{configure} }) {
+                } elsif (grep { $_ eq 'no_bundling' } @{ $cmdspec{configure} }) {
                     0;
                 } else {
                     0;
