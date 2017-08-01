@@ -10,9 +10,11 @@ use Log::ger;
 
 require Exporter;
 our @ISA = qw(Exporter);
+## no critic (Modules::ProhibitAutomaticExportation)
 our @EXPORT = qw(
                     GetOptions
             );
+## use critic
 
 # XXX completion & configure are actually only allowed at the top-level
 my @known_cmdspec_keys = qw(
