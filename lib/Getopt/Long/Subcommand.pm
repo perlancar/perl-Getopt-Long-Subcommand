@@ -1,6 +1,8 @@
 package Getopt::Long::Subcommand;
 
+# AUTHORITY
 # DATE
+# DIST
 # VERSION
 
 use 5.010001;
@@ -133,8 +135,10 @@ sub _GetOptions {
     if ($has_subcommands) {
         # for doing completion of subcommand names
         if ($is_completion) {
-            $res->{comp_subcommand_names}[$stash->{level}] =
+            my $scnames = $res->{comp_subcommand_names}[$stash->{level}] =
                 [sort keys %{$cmdspec->{subcommands}}];
+            $res->{comp_subcommand_summaries}[$stash->{level}] =
+                [map {$cmdspec->{subcommands}{$_}{summary}} @$scnames];
         }
 
         $res->{subcommand} //= [];
@@ -253,8 +257,9 @@ sub GetOptions {
                         $args{argpos} < @{$res->{comp_subcommand_names}//[]}) {
                     require Complete::Util;
                     return Complete::Util::complete_array_elem(
-                        array => $res->{comp_subcommand_names}[$args{argpos}],
-                        word  => $res->{comp_subcommand_name}[$args{argpos}],
+                        word      => $res->{comp_subcommand_name}[$args{argpos}],
+                        array     => $res->{comp_subcommand_names}[$args{argpos}],
+                        summaries => $res->{comp_subcommand_summaries}[$args{argpos}]
                     );
                 }
 
