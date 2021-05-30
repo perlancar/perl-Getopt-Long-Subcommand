@@ -1,3 +1,8 @@
+0.104   2021-05-30  Released-By: PERLANCAR; Urgency: medium
+
+	- [ux] Show summaries of subcommand in completion.
+
+
 0.103   2019-02-27  Released-By: PERLANCAR
 
 	- No functional changes.
